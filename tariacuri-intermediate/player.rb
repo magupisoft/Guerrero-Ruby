@@ -1,6 +1,6 @@
 class Player
 	
-	MIN_HEALTH = 14
+	@MIN_HEALTH = 14
 
   def play_turn(warrior)
 		@warrior = warrior
@@ -39,9 +39,13 @@ class Player
 	end
 	
 	def take_action
+		if @ticking_near.any? or @ticking_around.any?
+			@MIN_HEALTH = 6
+		end
+		
 		return move_to victory if @spaces.empty?
-		return rest if should_rest?
-		return take_shelter if must_rest?
+		return rest if should_rest? and not (@ticking_near.any? or @ticking_around.any?)
+		return take_shelter if must_rest? and not (@ticking_near.any? or @ticking_around.any?)
 		return deactive_bomb if @ticking_near.any? or @ticking_around.any?
 		return bind_enemy if @enemies_near.any? and @enemies_near.length > 1
 		return rescue_captive if @captives_near.any?
@@ -54,11 +58,11 @@ class Player
 	
 	private
 		def must_rest?
-			@warrior.health < MIN_HEALTH
+			@warrior.health < @MIN_HEALTH
 		end
 		
 		def should_rest?
-			@warrior.health < MIN_HEALTH && safe_to_rest?
+			@warrior.health < @MIN_HEALTH && safe_to_rest?
 		end
 				
 		def safe_to_rest?
@@ -76,8 +80,8 @@ class Player
 			puts "Warrior rest...new health #{@warrior.health}"
 		end
 		
-		def bind_enemy
-			direction = @enemies_near.last
+		def bind_enemy(direction = nil)
+			direction = @enemies_near.last if direction == nil
 			puts "Binding enemy in direction #{direction}"
 			@warrior.bind! direction
 		end
@@ -113,10 +117,12 @@ class Player
 		end
 		
 		def take_shelter
+			puts "Go to shelter"
 			move_to next_empty
 		end
 		
 		def deactive_bomb
+			puts "Deactivate bomb"
 			if not @ticking_near.empty?
 				direction = @ticking_near.first
 				puts "Deactive near bomb in direction #{direction}"
@@ -124,8 +130,18 @@ class Player
 			elsif not @ticking_around.empty?
 				direction = near_ticking_around
 				puts "Looking for the bomb around in direction #{direction}"
-				return move_to direction unless @warrior.feel(direction).enemy?
-				return attack_enemy direction
+				if @enemies_near.any? and @enemies_near.length > 1
+					puts "Go to Bind enemy"
+					bind_enemy
+				elsif @warrior.feel(direction).enemy?
+						puts "Enemy in direction #{direction}. Attack!"
+						attack_enemy direction
+				else					
+					move_to direction
+				end
+				#return move_to direction unless @warrior.feel(direction).enemy?
+				#return bind_enemy direction if @enemies_near.any? and @enemies_near.length > 1
+				#return attack_enemy direction
 			end
 		end
 		

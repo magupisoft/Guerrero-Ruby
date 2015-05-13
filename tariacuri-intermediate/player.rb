@@ -8,33 +8,9 @@ class Player
 		feel_environement
 		
 		take_action
-		
-		#	if should_rest?(warrior)
-		#		puts "it should rest! Warrior.Health = #{warrior.health}"
-		#		warrior.rest!			
-		#	elsif enemies_around?(warrior)
-		#		puts "Enemies around \##{@nearby_enemies_count} in last direction #{@direction}"
-		#		if @nearby_enemies_count > 1
-		#			puts "Bind near enemy in #{@direction}"
-		#			warrior.bind! @direction
-		#		elsif @distant_enemies_count > 0
-		#			warrior.direction_of
-		#		else
-		#			warrior.attack! @direction
-		#		end
-		#	elsif can_rescue?(warrior)				
-		#		warrior.rescue! @direction unless warrior.feel(@direction).enemy?
-		#	elsif has_to_attack?(warrior)
-		#			warrior.attack! @direction
-		#	else
-		#			warrior.walk! warrior.direction_of_stairs unlessenemies_around?(warrior)
-#			end
-#		else
-#			warrior.walk! warrior.direction_of_stairs
-#		end
-		
-		@last_health = warrior.health
   end
+	
+	protected
 	
 	def feel_environement
 		@directions = %w(forward backward left right).map(&:to_sym) #Ruby1.9.3
@@ -51,47 +27,43 @@ class Player
 		
 		@enemies_near = @directions.select{|d| @warrior.feel(d).enemy? }
 		puts "Enemies near #{@enemies_near.inspect}"
-		@empties_near = @directions.select{|d| @warrior.feel(d).empty? }
+		@empties_near = @directions.select{|d| @warrior.feel(d).empty? and not @warrior.feel(d).stairs?}
 		puts "Empties near #{@empties_near.inspect}"
 		@captives_near = @directions.select{|d| @warrior.feel(d).captive? }
 		puts "Captives near #{@captives_near.inspect}"
+		
+		@stairs_near = @directions.select{|d| @warrior.feel(d).stairs? }
+		puts "Stairs near #{@stairs_near.inspect}"
 	end
 	
 	def take_action
 		return move_to victory if @spaces.empty?
-		
 		return rest if should_rest?
+		return take_shelter if must_rest?
 		return bind_enemy if @enemies_near.any? and @enemies_near.length > 1
 		return attack_enemy if @enemies_near.any?
 		return rescue_captive if @captives_near.any?
-		return move_to next_empty unless @captives_around.any? || @enemies_around.any?
+		return move_to next_empty unless (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
 		return move_to near_captive_around if @captives_around.any?
 		return move_to near_enemy_around if @enemies_around.any?
+		return move_to @stairs_directions_non_near
 	end
 	
 	private
-				
-		def can_rescue?(warrior)
-			@DIRECTIONS.each do |direction|
-				if warrior.feel(direction).captive?
-					@direction = direction
-					return true
-				end
-			end
-			
-			return false
+		def must_rest?
+			@warrior.health < MIN_HEALTH
 		end
 		
 		def should_rest?
-			@warrior.health < MIN_HEALTH && safe_to_rest?(@warrior)
+			@warrior.health < MIN_HEALTH && safe_to_rest?
 		end
 				
-		def safe_to_rest?(warrior)
+		def safe_to_rest?
 			true unless @enemies_near.length > 0
 		end
 
 		#Action methods
-		def move_to(direction = @direction)
+		def move_to(direction)
 			puts "Moving warrior to #{direction}"
 			@warrior.walk! direction
 		end
@@ -102,7 +74,8 @@ class Player
 		end
 		
 		def bind_enemy
-			direction = @warrior.direction_of @enemies_near.last
+			direction = @enemies_near.last
+			puts "Binding enemy in direction #{direction}"
 			@warrior.bind! direction
 		end
 		
@@ -117,8 +90,9 @@ class Player
 		end
 		
 		def next_empty
-			puts "Go to next empty"
-			@empties_near.last
+			next_empty = @empties_near.shift
+			puts "Go to next empty #{next_empty}"
+			return next_empty
 		end
 		
 		def near_captive_around
@@ -133,5 +107,9 @@ class Player
 		
 		def victory
 			@warrior.direction_of_stairs 
+		end
+		
+		def take_shelter
+			move_to next_empty
 		end
 end

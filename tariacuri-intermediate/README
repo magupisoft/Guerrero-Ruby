@@ -1,21 +1,25 @@
-Level 8
+Level 9
 
-You discover a satchel of bombs which will help when facing a mob of enemies.
+Never before have you seen a room so full of sludge. Start the fireworks!
 
-Tip: Detonate a bomb when you see a couple enemies ahead of you (warrior.look). Watch out for your health too.
+Tip: Be careful not to let the ticking captive get caught in the flames. Use warrior.distance_of to avoid the captives.
 
- -------
-|@ Ss C>|
- -------
+ ----
+|ssC>|
+|@sss|
+|ssC |
+ ----
 
   > = Stairs
   @ = Tariacuri (20 HP)
   C = Captive (1 HP)
-  S = Thick Sludge (24 HP)
   s = Sludge (12 HP)
 
 
 Warrior Abilities:
+
+  warrior.distance_of
+    Pass a Space as an argument, and it will return an integer representing the distance to that space.
 
   warrior.look
     Returns an array of up to three Spaces in the given direction (forward by default).

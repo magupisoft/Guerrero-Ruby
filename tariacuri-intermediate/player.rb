@@ -36,6 +36,9 @@ class Player
 		puts "Stairs near #{@stairs_near.inspect}"
 		@ticking_near = @directions.select{|d| @warrior.feel(d).ticking? }
 		puts "Ticking near #{@ticking_near.inspect}"
+		
+		@enemies_ahead = @warrior.look
+		puts "Enemies ahead #{@enemies_ahead.inspect}"
 	end
 	
 	def take_action
@@ -43,16 +46,16 @@ class Player
 			@MIN_HEALTH = 6
 		end
 		
-		return move_to victory if @spaces.empty?
-		return rest if should_rest? and not (@ticking_near.any? or @ticking_around.any?)
-		return take_shelter if must_rest? and not (@ticking_near.any? or @ticking_around.any?)
-		return deactive_bomb if @ticking_near.any? or @ticking_around.any?
-		return bind_enemy if @enemies_near.any? and @enemies_near.length > 1
-		return rescue_captive if @captives_near.any?
-		return attack_enemy if @enemies_near.any? and not @ticking_around.any?
-		return move_to next_empty unless (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
-		return move_to near_captive_around if @captives_around.any?
-		return move_to near_enemy_around if @enemies_around.any?
+		return move_to victory 							if @spaces.empty?
+		return rest 												if should_rest? and not (@ticking_near.any? or @ticking_around.any?)
+		return take_shelter 								if must_rest? and not (@ticking_near.any? or @ticking_around.any?)
+		return deactive_bomb 								if @ticking_near.any? or @ticking_around.any?
+		return bind_enemy 									if @enemies_near.any? and @enemies_near.length > 1
+		return rescue_captive 							if @captives_near.any?
+		return attack_enemy 								if @enemies_near.any? and not @ticking_around.any?
+		return move_to next_empty 					unless (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
+		return move_to near_captive_around 	if @captives_around.any?
+		return move_to near_enemy_around 		if @enemies_around.any?
 		return move_to @stairs_directions_non_near
 	end
 	
@@ -132,17 +135,24 @@ class Player
 				puts "Looking for the bomb around in direction #{direction}"
 				if @enemies_near.any? and @enemies_near.length > 1
 					puts "Go to Bind enemy"
-					bind_enemy
+					bind_enemy			
 				elsif @warrior.feel(direction).enemy?
+					if @enemies_ahead.any? and @enemies_ahead.count{|a| a.enemy?} >= 2
+						detonate_bomb
+					else
 						puts "Enemy in direction #{direction}. Attack!"
 						attack_enemy direction
+					end
 				else					
 					move_to direction
 				end
-				#return move_to direction unless @warrior.feel(direction).enemy?
-				#return bind_enemy direction if @enemies_near.any? and @enemies_near.length > 1
-				#return attack_enemy direction
 			end
+		end
+		
+		def detonate_bomb
+			direction = @warrior.direction_of @enemies_ahead.select{|s| s.enemy?}.first
+			puts "Detonate bomb in direction #{direction}"
+			@warrior.detonate! direction
 		end
 		
 		def near_ticking_around

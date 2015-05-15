@@ -1,3 +1,5 @@
+#Manuel Gutiérrez Pineda
+#@magupisoft 2015
 class Player
 
 	EXTREME_MIN_HEALTH ||= 3
@@ -5,14 +7,18 @@ class Player
   def play_turn(warrior)
 		@warrior = warrior
 
-		puts ("=" * 15) + " STATUS " + ("=" * 15)		
+		print_status_title
 		feel_environement
-		puts "=" * 15 + " ACTIONS " + ("=" * 15)		
+		
+		print_action_title
 		take_action
   end
 	
 	protected
 	
+		#########################
+		###   steps methods    ##
+		#########################
 		def feel_environement
 			@directions = %w(forward backward left right).map(&:to_sym) #Ruby1.9.3
 			@min_health = 8			
@@ -64,15 +70,15 @@ class Player
 	
 		def take_action		
 			return move_to stairs								if @spaces.empty?
-			return rest													if (should_rest? and not exist_ticking?) or (exist_ticking? and must_rest? and safe_to_rest?)
-			return take_shelter									if (must_scape? and not exist_ticking?) or (must_scape? and exist_ticking? and @enemies_near.length >=2)
-			return deactive_bomb								if exist_ticking? and @distance_of_ticking_captives <= 2 
+			return rest													if decide_to_rest?
+			return take_shelter									if decide_to_take_shelter?
+			return deactivate_bomb							if exist_ticking? and @distance_of_ticking_captives <= 2 
 			return bind_enemy										if (@enemies_near.any? and @enemies_near.length > 1) 
-			return detonate_bomb								if (enemies_look? and (@enemies_near.any? or surrounded_enemies.length > 0) and (@distance_of_ticking_captives == -1 or @distance_of_ticking_captives > 2)) or (enemies_look? and (@enemies_near.any? or surrounded_enemies.length > 0) and exist_ticking? and @distance_of_ticking_captives > 2)
-			return rest													if must_rest? and ((not exist_ticking? and surrounded_enemies.length == 0) or (not exist_ticking? and @distance_of_ticking_captives > 2)) and not sludge_is_obstructing?
+			return detonate_bomb								if decide_to_detonate_bomb_action? 
+			return rest													if decide_to_rest_necessarily?			
 			return rescue_captive 							if @captives_near.any? and not exist_ticking?
-			return attack_enemy 								if (@enemies_near.any? and not exist_ticking?) or (exist_ticking? and sludge_is_obstructing?) or (exist_ticking? and surrounded_enemies.length > 1 and @warrior.feel(near_ticking_around).enemy?)
-			return move_to next_empty 					if not (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
+			return attack_enemy 								if decide_to_attack_enemy_action? 
+			return move_to near_empty 					if not (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
 			return move_to near_captive_around 	if @captives_around.any? and not exist_ticking?
 			return move_to near_enemy_around 		if @enemies_around.any? and not exist_ticking?
 			return move_to near_ticking_around	if exist_ticking?
@@ -81,7 +87,9 @@ class Player
 	
 	private
 	
-		#Decisition methods
+		#########################
+		### Decisition methods ##
+		#########################
 		def must_scape?
 			if @enemies_around.empty? & @enemies_near.empty?
 				return false 
@@ -167,24 +175,47 @@ class Player
 			puts "\tsludge is obstructing? #{obsctruct}"
 			return obsctruct
 		end
-			
-		#Action methods
+		
+		# Decition steps 
+		def decide_to_rest?
+			(should_rest? and not exist_ticking?) or
+			(exist_ticking? and must_rest? and safe_to_rest?)
+		end
+		
+		def decide_to_take_shelter?
+			(must_scape? and not exist_ticking?) or 
+			(must_scape? and exist_ticking? and @enemies_near.length >=2)
+		end
+		
+		def decide_to_detonate_bomb_action?
+			(enemies_look? and 
+				(@enemies_near.any? or surrounded_enemies.length > 0) and
+			 	(@distance_of_ticking_captives == -1 or @distance_of_ticking_captives > 2)) or
+			(enemies_look? and 
+				(@enemies_near.any? or surrounded_enemies.length > 0) and
+			 	exist_ticking? and @distance_of_ticking_captives > 2)
+		end
+						
+		def decide_to_attack_enemy_action?
+			(@enemies_near.any? and not exist_ticking?)		or
+			 (exist_ticking? and sludge_is_obstructing?)	or
+			 (exist_ticking? and 
+			 								surrounded_enemies.length > 1 and 
+															@warrior.feel(near_ticking_around).enemy?)
+		end
+		
+		def decide_to_rest_necessarily?
+			must_rest? and 
+			((not exist_ticking? and surrounded_enemies.length == 0) or
+			 			(not exist_ticking? and @distance_of_ticking_captives > 2)) and
+				not sludge_is_obstructing?
+		end
+		#########################
+		###   action methods   ##
+		#########################
 		def move_to(direction)
 			puts "\tMoving warrior to #{direction}"
 			@warrior.walk! direction
-		end
-		
-		def opposite_direction(direction)
-			case direction
-			when 'forward'
-				return 'backward'
-			when 'backward'
-				return 'forward'
-			when 'right'
-				return 'left'
-			when 'left'
-				return 'right'
-			end
 		end
 		
 		def rest
@@ -192,6 +223,8 @@ class Player
 		end
 		
 		def bind_enemy(direction = nil)
+			puts "\tbinding enemy"
+			
 			direction = @enemies_near.last if direction == nil
 			puts "\tBinding enemy in direction #{direction}"
 			@recent_binded_direction[@warrior.feel(direction)] = direction.to_s
@@ -265,10 +298,10 @@ class Player
 			end
 		end
 
-		def next_empty
-			next_empty = @empties_near.pop
-			puts "\tGo to next empty #{next_empty}"
-			return next_empty
+		def near_empty
+			near_empty = @empties_near.pop
+			puts "\tGo to next empty #{near_empty}"
+			return near_empty
 		end
 
 		def near_captive_around
@@ -294,11 +327,11 @@ class Player
 			if @empties_near.any?
 				puts "\tGo to shelter"
 				@went_to_shelter = true
-				move_to next_empty
+				move_to near_empty
 			end
 		end
 
-		def deactive_bomb
+		def deactivate_bomb
 			puts "\tDeactivating bomb"
 			
 			if not @ticking_near.empty?
@@ -368,7 +401,7 @@ class Player
 				take_shelter
 			end
 		end
-				
+
 		def surrounded_enemies	
 			enemies = []
 			@directions.each do |direction|
@@ -389,5 +422,28 @@ class Player
 			puts "\tSurrounded by enemies #{enemies.inspect}"
 			return enemies
 		end
+
+		#########################
+		###    util methods    ##
+		#########################
+		def opposite_direction(direction)
+			case direction
+			when 'forward'
+				return 'backward'
+			when 'backward'
+				return 'forward'
+			when 'right'
+				return 'left'
+			when 'left'
+				return 'right'
+			end
+		end
 		
+		def print_status_title
+				puts ("=" * 15) + " STATUS " + ("=" * 15)		
+		end	
+		
+		def print_action_title
+				puts "=" * 15 + " ACTIONS " + ("=" * 15)		
+		end
 end

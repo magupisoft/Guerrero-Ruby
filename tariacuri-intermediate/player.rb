@@ -84,17 +84,14 @@ class Player
 		#Decisition methods
 		def must_scape?
 			if @enemies_around.empty? & @enemies_near.empty?
-				puts "must_scape? false  - Enemies around empty"
 				return false 
 			end
 			
 			if exist_ticking? and (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
-				puts "must_scape? false  - ticking captive is priority"
 				return false 
-			end			
+			end
 
 			if @warrior.health <= @min_health
-					puts "\tmust_scape? #{@warrior.health <= @min_health}"
 					return @warrior.health <= @min_health
 			end
 		end
@@ -109,24 +106,20 @@ class Player
 
 		def must_rest?
 			if @went_to_shelter
-				puts "Went to shelter, so must_rest? true"
-				@went_to_shelter = false
-				return true
+				 @went_to_shelter = false
+				 return true
 			end
 			
 			if exist_ticking?
 				if (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?) and not @warrior.health <= EXTREME_MIN_HEALTH
-					puts "must_rest? false"
 					return false 
 				end
 			end
 			
 			if @warrior.health <= EXTREME_MIN_HEALTH or should_rest?
-					puts "must_rest? true"
 					return true 
 			end
 
-			puts "must_rest? false_"
 			return false
 		end
 
@@ -242,7 +235,6 @@ class Player
 			real_captive_found = false
 			@captives_near.each do |direction|				
 					warrior_feel = @warrior.feel(direction)
-					puts warrior_feel
 					if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('c')
 						puts "\tRescueing a real captive in #{direction}"
 						@warrior.rescue! direction

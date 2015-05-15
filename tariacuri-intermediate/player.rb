@@ -1,162 +1,353 @@
 class Player
-	
-	@MIN_HEALTH = 14
+
+	EXTREME_MIN_HEALTH ||= 5
 
   def play_turn(warrior)
 		@warrior = warrior
-		
+
+		puts ("=" * 15) + " STATUS " + ("=" * 15)		
 		feel_environement
-		
+		puts "=" * 15 + " ACTIONS " + ("=" * 15)		
 		take_action
   end
 	
 	protected
 	
-	def feel_environement
-		@directions = %w(forward backward left right).map(&:to_sym) #Ruby1.9.3
-		#@direction ||= :forward
-		@spaces = @warrior.listen
+		def feel_environement
+			@directions = %w(forward backward left right).map(&:to_sym) #Ruby1.9.3
+			@min_health = 8			
+			@recent_binded_direction ||= {}
+			
+			@spaces = @warrior.listen
 		
-		@enemies_around = @spaces.select{|u| u.enemy? }
-		puts "Enemies around #{@enemies_around.inspect}"
-		@empties_around = @spaces.select{|u| u.empty? and not u.stairs? }
-		puts "Empties around #{@empties_around.inspect}"
-		@captives_around = @spaces.select{|u| u.captive? }
-		puts "Captives around #{@captives_around.inspect}"
-		@ticking_around = @spaces.select{|u| u.ticking? }
-		puts "Ticking around #{@ticking_around.inspect}"
+			@enemies_around = @spaces.select{|u| u.enemy? }
+			puts "-Enemies around #{@enemies_around.inspect}"
+			@empties_around = @spaces.select{|u| u.empty? and not u.stairs? }
+			puts "-Empties around #{@empties_around.inspect}"
+			@captives_around = @spaces.select{|u| u.captive? }
+			puts "-Captives around #{@captives_around.inspect}"
+			@ticking_around = @spaces.select{|u| u.ticking? }
+			puts "-Ticking around #{@ticking_around.inspect}"
 		
-		@enemies_near = @directions.select{|d| @warrior.feel(d).enemy? }
-		puts "Enemies near #{@enemies_near.inspect}"
-		@empties_near = @directions.select{|d| @warrior.feel(d).empty? and not @warrior.feel(d).stairs?}
-		puts "Empties near #{@empties_near.inspect}"
-		@captives_near = @directions.select{|d| @warrior.feel(d).captive? }
-		puts "Captives near #{@captives_near.inspect}"		
-		@stairs_near = @directions.select{|d| @warrior.feel(d).stairs? }
-		puts "Stairs near #{@stairs_near.inspect}"
-		@ticking_near = @directions.select{|d| @warrior.feel(d).ticking? }
-		puts "Ticking near #{@ticking_near.inspect}"
+			@enemies_near = @directions.select{|d| @warrior.feel(d).enemy? }
+			puts "-Enemies near #{@enemies_near.inspect}"
+			@empties_near = @directions.select{|d| @warrior.feel(d).empty? and not @warrior.feel(d).stairs?}
+			puts "-Empties near #{@empties_near.inspect}"
+			@captives_near = @directions.select{|d| @warrior.feel(d).captive? }
+			puts "-Captives near #{@captives_near.inspect}"		
+			@stairs_near = @directions.select{|d| @warrior.feel(d).stairs? }
+			puts "-Stairs near #{@stairs_near.inspect}"
+			@ticking_near = @directions.select{|d| @warrior.feel(d).ticking? }
+			puts "-Ticking near #{@ticking_near.inspect}"
 		
-		@enemies_ahead = @warrior.look
-		puts "Enemies ahead #{@enemies_ahead.inspect}"
-	end
-	
-	def take_action
-		if @ticking_near.any? or @ticking_around.any?
-			@MIN_HEALTH = 6
+			@look_ahead = @warrior.look
+			puts "-Look ahead #{@look_ahead.inspect}"
+		
+			if @ticking_around.any?
+				@distance_of_ticking_captives = @warrior.distance_of @ticking_around.first
+				puts "-Distance of ticking captive #{@distance_of_ticking_captives}"
+			else
+				@distance_of_ticking_captives = -1
+			end
+
+			if exist_ticking?
+				@min_health = 6 unless sludge_is_obstructing?
+				@min_health = 4 if sludge_is_obstructing?
+			end
+			puts "-Min health \##{@min_health}"
+			
 		end
-		
-		return move_to victory 							if @spaces.empty?
-		return rest 												if should_rest? and not (@ticking_near.any? or @ticking_around.any?)
-		return take_shelter 								if must_rest? and not (@ticking_near.any? or @ticking_around.any?)
-		return deactive_bomb 								if @ticking_near.any? or @ticking_around.any?
-		return bind_enemy 									if @enemies_near.any? and @enemies_near.length > 1
-		return rescue_captive 							if @captives_near.any?
-		return attack_enemy 								if @enemies_near.any? and not @ticking_around.any?
-		return move_to next_empty 					unless (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
-		return move_to near_captive_around 	if @captives_around.any?
-		return move_to near_enemy_around 		if @enemies_around.any?
-		return move_to @stairs_directions_non_near
-	end
+	
+		def take_action		
+			return move_to stairs								if @spaces.empty?
+			return rest													if (should_rest? and not exist_ticking?) or (exist_ticking? and must_rest? and safe_to_rest?)
+			return take_shelter									if must_scape? and not exist_ticking?
+			return deactive_bomb								if exist_ticking? and @distance_of_ticking_captives < 2
+			return bind_enemy										if (@enemies_near.any? and @enemies_near.length > 1) 
+			return detonate_bomb								if enemies_ahead? and @enemies_near.any?
+			return rest													if must_rest? and ((not exist_ticking? and surrounded_enemies.length == 0) or (not exist_ticking? and @distance_of_ticking_captives > 2)) and not sludge_is_obstructing?
+			return rescue_captive 							if @captives_near.any? and not exist_ticking?
+			return attack_enemy 								if (@enemies_near.any? and not exist_ticking?) or (exist_ticking? and sludge_is_obstructing?) or (exist_ticking? and surrounded_enemies.length > 1 and @warrior.feel(near_ticking_around).enemy?)
+			return move_to next_empty 					if not (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
+			return move_to near_captive_around 	if @captives_around.any? and not exist_ticking?
+			return move_to near_enemy_around 		if @enemies_around.any? and not exist_ticking?
+			return move_to near_ticking_around	if exist_ticking?
+			return move_to @stairs_directions_non_near
+		end
 	
 	private
-		def must_rest?
-			@warrior.health < @MIN_HEALTH
-		end
-		
-		def should_rest?
-			@warrior.health < @MIN_HEALTH && safe_to_rest?
-		end
-				
-		def safe_to_rest?
-			true unless @enemies_near.length > 0
+	
+		#Decisition methods
+		def must_scape?
+			if @enemies_around.empty? & @enemies_near.empty?
+				puts "must_scape? false  - Enemies around empty"
+				return false 
+			end
+			
+			if exist_ticking? && (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
+				puts "must_scape? false  - ticking captive is priority"
+				return false 
+			end			
+
+			if @warrior.health <= @min_health
+					puts "\tmust_scape? #{@warrior.health <= @min_health}"
+					return @warrior.health <= @min_health
+			end
 		end
 
+		def should_rest?
+			to_scape = must_scape? & safe_to_rest?
+			ticking_captives = @distance_of_ticking_captives > 2
+			ticking_captives = @distance_of_ticking_captives == -1 if ticking_captives == false
+			return to_scape & ticking_captives
+		end
+
+		def must_rest?
+			if exist_ticking? && (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
+				puts "must_rest? false"
+				return false 
+			end
+			
+			if @warrior.health <= EXTREME_MIN_HEALTH or should_rest?
+					puts "must_rest? true"
+					return true 
+			end
+
+			puts "must_rest? false"
+			return false
+		end
+
+		def safe_to_rest?
+			@enemies_near.length == 0
+		end
+
+		def exist_ticking?
+			@ticking_near.any? or @ticking_around.any?
+		end
+
+		def enemies_ahead?
+			@look_ahead.any? and @look_ahead.count{ |a| a.enemy? } >= 2
+		end
+		
+		def sludge_is_obstructing?
+			obsctruct = false
+			
+			enemies = surrounded_enemies
+			obsctruct = false if enemies.empty? or enemies.nil?
+			
+			enemies.each do |e|
+				 if near_ticking_around == @warrior.direction_of(e)
+					 obsctruct = true
+					 break
+				end
+			end
+			
+			puts "\tsludge is obstructing? #{obsctruct}"
+			return obsctruct
+		end
+			
 		#Action methods
 		def move_to(direction)
-			puts "Moving warrior to #{direction}"
+			puts "\tMoving warrior to #{direction}"
 			@warrior.walk! direction
+			
+			#update_last_binded_direction direction
+		end
+		
+		def opposite_direction(direction)
+			case direction
+			when 'forward'
+				return 'backward'
+			when 'backward'
+				return 'forward'
+			when 'right'
+				return 'left'
+			when 'left'
+				return 'right'
+			end
 		end
 		
 		def rest
 			@warrior.rest!
-			puts "Warrior rest...new health #{@warrior.health}"
 		end
 		
 		def bind_enemy(direction = nil)
 			direction = @enemies_near.last if direction == nil
-			puts "Binding enemy in direction #{direction}"
+			puts "\tBinding enemy in direction #{direction}"
+			@recent_binded_direction[@warrior.feel(direction)] = direction.to_s
 			@warrior.bind! direction
+			puts "\tBind direction #{@recent_binded_direction.inspect}"
 		end
 		
 		def attack_enemy(direction = nil)
-			direction = @enemies_near.last if direction == nil
-			@warrior.attack! direction
+			puts "\tattacking enemy"
+			if direction != nil
+				return	@warrior.attack! direction
+			end
+			
+			if not @enemies_near.empty?
+				direction = @enemies_near.last if direction == nil
+				@warrior.attack! direction
+			else
+				enemies = surrounded_enemies
+					if enemies.length > 0
+						direction = near_ticking_around
+						if @warrior.feel(direction).to_s.downcase.start_with?('s')
+								@warrior.attack! direction
+						else
+							direction = @warrior.direction_of(enemies.first)
+							@warrior.attack! direction
+						end
+					else
+						direction = @warrior.direction_of(enemies.first)
+						@warrior.attack! direction
+					end
+			end
 		end
 		
 		def rescue_captive
-			direction = @captives_near.last
-			@warrior.rescue! direction
+			puts "\trescueing captive"
+			
+			direction = @captives_near.first
+			return @warrior.rescue! direction if @recent_binded_direction.empty?
+			return @warrior.rescue! direction if surrounded_enemies.length == 0
+			
+			real_captive_found = false
+			@captives_near.each do |direction|				
+					warrior_feel = @warrior.feel(direction)
+					puts warrior_feel
+					if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('c')
+						puts "\tRescueing a real captive in #{direction}"
+						@warrior.rescue! direction
+						real_captive_found = true						
+						break
+					end
+			end
+			
+			if not real_captive_found
+				@captives_near.each do |direction|
+					binded = @recent_binded_direction.select{ |key,value| 
+							@warrior.direction_of(key) == direction 
+						} unless @recent_binded_direction.empty? or not @recent_binded_direction.any?
+					
+						if binded != nil and not binded.empty?					
+							warrior_feel = @warrior.feel(@warrior.direction_of(binded.keys[0]))
+							if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('s')
+								puts "\tCaptive is in fact an enemy. Attack! in #{direction}"
+								attack_enemy direction
+	
+								@recent_binded_direction.delete_if do |key, value|
+									 @warrior.direction_of(key) == direction
+								end
+								break
+							end
+						end
+				end
+			end
 		end
-		
+
 		def next_empty
 			next_empty = @empties_near.pop
-			puts "Go to next empty #{next_empty}"
+			puts "\tGo to next empty #{next_empty}"
 			return next_empty
 		end
-		
+
 		def near_captive_around
-			puts "Go to next captive around"
+			puts "\tGo to next captive around"
 			@warrior.direction_of @captives_around.last
 		end
-		
+
 		def near_enemy_around
-			puts "Go to next enemy around"
+			puts "\tGo to next enemy around"
 			@warrior.direction_of @enemies_around.last
 		end
-		
-		def victory
+
+		def near_ticking_around
+			@warrior.direction_of @ticking_around.first
+		end
+
+		def stairs
 			@warrior.direction_of_stairs 
 		end
-		
+
 		def take_shelter
-			puts "Go to shelter"
-			move_to next_empty
+			puts "\ttaking shelter"
+			if @empties_near.any?
+				puts "\tGo to shelter"
+				move_to next_empty
+			end
 		end
-		
+
 		def deactive_bomb
-			puts "Deactivate bomb"
+			puts "\tDeactivating bomb"
 			if not @ticking_near.empty?
 				direction = @ticking_near.first
-				puts "Deactive near bomb in direction #{direction}"
+				puts "\tDeactive near bomb in direction #{direction}"
 				@warrior.rescue! direction
 			elsif not @ticking_around.empty?
 				direction = near_ticking_around
-				puts "Looking for the bomb around in direction #{direction}"
-				if @enemies_near.any? and @enemies_near.length > 1
-					puts "Go to Bind enemy"
-					bind_enemy			
+				puts "\tLooking for the bomb around in direction #{direction}"
+				if @enemies_near.any?					
+					if enemies_ahead? and @distance_of_ticking_captives > 2
+						detonate_bomb
+					elsif @enemies_near.length > 1
+						puts "\tGo to Bind enemy"
+						bind_enemy
+					else
+						puts "\tEnemy in direction #{direction}. Attack!"
+						attack_enemy
+					end					
 				elsif @warrior.feel(direction).enemy?
-					if @enemies_ahead.any? and @enemies_ahead.count{|a| a.enemy?} >= 2
+					if enemies_ahead? and @distance_of_ticking_captives > 2
 						detonate_bomb
 					else
-						puts "Enemy in direction #{direction}. Attack!"
+						puts "\tEnemy in direction #{direction}. Attack!"
 						attack_enemy direction
 					end
+				elsif must_scape?
+					rest
 				else					
 					move_to direction
 				end
 			end
 		end
-		
+
 		def detonate_bomb
-			direction = @warrior.direction_of @enemies_ahead.select{|s| s.enemy?}.first
-			puts "Detonate bomb in direction #{direction}"
-			@warrior.detonate! direction
+			puts "\tdetonating bomb"
+			
+			if not must_scape?
+				enemies = @look_ahead.select{ |s| s.enemy? }
+				if not enemies.empty?
+					direction = @warrior.direction_of enemies.first
+					puts "\tDetonate bomb in direction #{direction}"
+					@warrior.detonate! direction
+				else
+					rest
+				end
+			else
+				rest
+			end
+		end
+				
+		def surrounded_enemies	
+			enemies = []
+			@directions.each do |direction|
+				if @warrior.feel(direction).enemy? 
+					enemies << @warrior.feel(direction)
+				end
+				
+				binded = @recent_binded_direction.select{ |key,value| 
+						@warrior.direction_of(key) == direction 
+					} unless @recent_binded_direction.empty? or not @recent_binded_direction.any?
+	
+				if binded != nil and not binded.empty?
+					warrior_feel = @warrior.feel(@warrior.direction_of(binded.keys[0]))
+					enemies << binded.keys[0] if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('s')
+				end
+			end
+			
+			puts "\tSurrounded by enemies #{enemies.inspect}"
+			return enemies
 		end
 		
-		def near_ticking_around
-			puts "Go to next ticking around"
-			@warrior.direction_of @ticking_around.last
-		end
 end

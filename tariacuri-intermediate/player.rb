@@ -69,19 +69,19 @@ class Player
 		end
 	
 		def take_action		
-			return move_to stairs								if @spaces.empty?
-			return rest													if decide_to_rest?
-			return take_shelter									if decide_to_take_shelter?
-			return deactivate_bomb							if exist_ticking? and @distance_of_ticking_captives <= 2 
-			return bind_enemy										if (@enemies_near.any? and @enemies_near.length > 1) 
-			return detonate_bomb								if decide_to_detonate_bomb_action? 
-			return rest													if decide_to_rest_necessarily?			
-			return rescue_captive 							if @captives_near.any? and not exist_ticking?
-			return attack_enemy 								if decide_to_attack_enemy_action? 
-			return move_to near_empty 					if not (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
-			return move_to near_captive_around 	if @captives_around.any? and not exist_ticking?
+			return move_to stairs				if @spaces.empty?
+			return rest					if decide_to_rest?
+			return take_shelter				if decide_to_take_shelter?
+			return deactivate_bomb				if exist_ticking? and @distance_of_ticking_captives <= 2 
+			return bind_enemy				if (@enemies_near.any? and @enemies_near.length > 1) 
+			return detonate_bomb				if decide_to_detonate_bomb_action? 
+			return rest					if decide_to_rest_necessarily?			
+			return rescue_captive 				if @captives_near.any? and not exist_ticking?
+			return attack_enemy 				if decide_to_attack_enemy_action? 
+			return move_to near_empty 			if not (@captives_around.any? or @enemies_around.any?) and @stairs_near.empty?
+			return move_to near_captive_around 		if @captives_around.any? and not exist_ticking?
 			return move_to near_enemy_around 		if @enemies_around.any? and not exist_ticking?
-			return move_to near_ticking_around	if exist_ticking?
+			return move_to near_ticking_around		if exist_ticking?
 			return move_to @stairs_directions_non_near
 		end
 	
@@ -197,18 +197,17 @@ class Player
 		end
 						
 		def decide_to_attack_enemy_action?
-			(@enemies_near.any? and not exist_ticking?)		or
+			(@enemies_near.any? and not exist_ticking?)	or
 			 (exist_ticking? and sludge_is_obstructing?)	or
-			 (exist_ticking? and 
-			 								surrounded_enemies.length > 1 and 
-															@warrior.feel(near_ticking_around).enemy?)
+			 (exist_ticking? and surrounded_enemies.length > 1 and 
+				@warrior.feel(near_ticking_around).enemy?)
 		end
 		
 		def decide_to_rest_necessarily?
 			must_rest? and 
 			((not exist_ticking? and surrounded_enemies.length == 0) or
-			 			(not exist_ticking? and @distance_of_ticking_captives > 2)) and
-				not sludge_is_obstructing?
+			 (not exist_ticking? and @distance_of_ticking_captives > 2)) and
+			  not sludge_is_obstructing?
 		end
 		
 		#########################

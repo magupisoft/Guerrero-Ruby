@@ -1,6 +1,6 @@
 class Player
 
-	EXTREME_MIN_HEALTH ||= 5
+	EXTREME_MIN_HEALTH ||= 3
 
   def play_turn(warrior)
 		@warrior = warrior
@@ -40,9 +40,11 @@ class Player
 			@ticking_near = @directions.select{|d| @warrior.feel(d).ticking? }
 			puts "-Ticking near #{@ticking_near.inspect}"
 		
-			@look_ahead = @warrior.look
-			puts "-Look ahead #{@look_ahead.inspect}"
-		
+			@look_ahead = @warrior.look :forward
+			@look_behind = @warrior.look :backward
+			@look_left = @warrior.look :left
+			@look_right = @warrior.look :right
+									
 			if @ticking_around.any?
 				@distance_of_ticking_captives = @warrior.distance_of @ticking_around.first
 				puts "-Distance of ticking captive #{@distance_of_ticking_captives}"
@@ -53,6 +55,8 @@ class Player
 			if exist_ticking?
 				@min_health = 6 unless sludge_is_obstructing?
 				@min_health = 4 if sludge_is_obstructing?
+				@min_health = 8 if @enemies_near.length > 2
+				@min_health = 12 if not exist_ticking? and not @enemies_near.length > 2
 			end
 			puts "-Min health \##{@min_health}"
 			
@@ -61,10 +65,10 @@ class Player
 		def take_action		
 			return move_to stairs								if @spaces.empty?
 			return rest													if (should_rest? and not exist_ticking?) or (exist_ticking? and must_rest? and safe_to_rest?)
-			return take_shelter									if must_scape? and not exist_ticking?
-			return deactive_bomb								if exist_ticking? and @distance_of_ticking_captives < 2
+			return take_shelter									if (must_scape? and not exist_ticking?) or (must_scape? and exist_ticking? and @enemies_near.length >=2)
+			return deactive_bomb								if exist_ticking? and @distance_of_ticking_captives <= 2 
 			return bind_enemy										if (@enemies_near.any? and @enemies_near.length > 1) 
-			return detonate_bomb								if enemies_ahead? and @enemies_near.any?
+			return detonate_bomb								if (enemies_look? and (@enemies_near.any? or surrounded_enemies.length > 0) and (@distance_of_ticking_captives == -1 or @distance_of_ticking_captives > 2)) or (enemies_look? and (@enemies_near.any? or surrounded_enemies.length > 0) and exist_ticking? and @distance_of_ticking_captives > 2)
 			return rest													if must_rest? and ((not exist_ticking? and surrounded_enemies.length == 0) or (not exist_ticking? and @distance_of_ticking_captives > 2)) and not sludge_is_obstructing?
 			return rescue_captive 							if @captives_near.any? and not exist_ticking?
 			return attack_enemy 								if (@enemies_near.any? and not exist_ticking?) or (exist_ticking? and sludge_is_obstructing?) or (exist_ticking? and surrounded_enemies.length > 1 and @warrior.feel(near_ticking_around).enemy?)
@@ -84,7 +88,7 @@ class Player
 				return false 
 			end
 			
-			if exist_ticking? && (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
+			if exist_ticking? and (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
 				puts "must_scape? false  - ticking captive is priority"
 				return false 
 			end			
@@ -99,13 +103,22 @@ class Player
 			to_scape = must_scape? & safe_to_rest?
 			ticking_captives = @distance_of_ticking_captives > 2
 			ticking_captives = @distance_of_ticking_captives == -1 if ticking_captives == false
+			
 			return to_scape & ticking_captives
 		end
 
 		def must_rest?
-			if exist_ticking? && (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?)
-				puts "must_rest? false"
-				return false 
+			if @went_to_shelter
+				puts "Went to shelter, so must_rest? true"
+				@went_to_shelter = false
+				return true
+			end
+			
+			if exist_ticking?
+				if (@warrior.feel(near_ticking_around).empty? or @warrior.feel(near_ticking_around).captive?) and not @warrior.health <= EXTREME_MIN_HEALTH
+					puts "must_rest? false"
+					return false 
+				end
 			end
 			
 			if @warrior.health <= EXTREME_MIN_HEALTH or should_rest?
@@ -113,7 +126,7 @@ class Player
 					return true 
 			end
 
-			puts "must_rest? false"
+			puts "must_rest? false_"
 			return false
 		end
 
@@ -125,8 +138,24 @@ class Player
 			@ticking_near.any? or @ticking_around.any?
 		end
 
+		def enemies_look?
+			enemies_ahead? or enemies_behind? or enemies_left? or enemies_right?
+		end
+		
 		def enemies_ahead?
 			@look_ahead.any? and @look_ahead.count{ |a| a.enemy? } >= 2
+		end
+		
+		def enemies_behind?
+			@look_behind.any? and @look_behind.count{ |a| a.enemy? } >= 2
+		end
+		
+		def enemies_left?
+			@look_left.any? and @look_left.count{ |a| a.enemy? } >= 2
+		end
+		
+		def enemies_right?
+			@look_right.any? and @look_right.count{ |a| a.enemy? } >= 2
 		end
 		
 		def sludge_is_obstructing?
@@ -150,8 +179,6 @@ class Player
 		def move_to(direction)
 			puts "\tMoving warrior to #{direction}"
 			@warrior.walk! direction
-			
-			#update_last_binded_direction direction
 		end
 		
 		def opposite_direction(direction)
@@ -274,21 +301,24 @@ class Player
 			puts "\ttaking shelter"
 			if @empties_near.any?
 				puts "\tGo to shelter"
+				@went_to_shelter = true
 				move_to next_empty
 			end
 		end
 
 		def deactive_bomb
 			puts "\tDeactivating bomb"
+			
 			if not @ticking_near.empty?
 				direction = @ticking_near.first
-				puts "\tDeactive near bomb in direction #{direction}"
+				puts "\tDeactivate near bomb in direction #{direction}"
 				@warrior.rescue! direction
 			elsif not @ticking_around.empty?
 				direction = near_ticking_around
 				puts "\tLooking for the bomb around in direction #{direction}"
-				if @enemies_near.any?					
-					if enemies_ahead? and @distance_of_ticking_captives > 2
+				
+				if @enemies_near.any?
+					if enemies_look? and @distance_of_ticking_captives > 2
 						detonate_bomb
 					elsif @enemies_near.length > 1
 						puts "\tGo to Bind enemy"
@@ -298,7 +328,7 @@ class Player
 						attack_enemy
 					end					
 				elsif @warrior.feel(direction).enemy?
-					if enemies_ahead? and @distance_of_ticking_captives > 2
+					if enemies_look? and @distance_of_ticking_captives > 2
 						detonate_bomb
 					else
 						puts "\tEnemy in direction #{direction}. Attack!"
@@ -307,7 +337,15 @@ class Player
 				elsif must_scape?
 					rest
 				else					
-					move_to direction
+					if @warrior.feel(direction).to_s.downcase.start_with?('s')
+						@empties_near.each do |e|
+							if @warrior.feel(e).empty?
+								return move_to e
+							end
+						end
+					else
+						move_to direction
+					end
 				end
 			end
 		end
@@ -317,6 +355,16 @@ class Player
 			
 			if not must_scape?
 				enemies = @look_ahead.select{ |s| s.enemy? }
+				if enemies.empty?
+					enemies = @look_behind.select{ |s| s.enemy? }
+				end
+				if enemies.empty?
+					enemies = @look_left.select{ |s| s.enemy? }
+				end
+				if enemies.empty?
+					enemies = @look_right.select{ |s| s.enemy? }
+				end
+				
 				if not enemies.empty?
 					direction = @warrior.direction_of enemies.first
 					puts "\tDetonate bomb in direction #{direction}"
@@ -325,7 +373,7 @@ class Player
 					rest
 				end
 			else
-				rest
+				take_shelter
 			end
 		end
 				

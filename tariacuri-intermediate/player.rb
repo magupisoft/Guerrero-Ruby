@@ -176,7 +176,7 @@ class Player
 			return obsctruct
 		end
 		
-		# Decition steps 
+		##### Decition steps ####
 		def decide_to_rest?
 			(should_rest? and not exist_ticking?) or
 			(exist_ticking? and must_rest? and safe_to_rest?)
@@ -210,12 +210,18 @@ class Player
 			 			(not exist_ticking? and @distance_of_ticking_captives > 2)) and
 				not sludge_is_obstructing?
 		end
+		
 		#########################
 		###   action methods   ##
 		#########################
 		def move_to(direction)
-			puts "\tMoving warrior to #{direction}"
-			@warrior.walk! direction
+			if @warrior.feel(direction).stairs? and not @spaces.empty?
+				puts "\tMoving warrior to #{direction}"
+				@warrior.walk! near_empty
+			else
+				puts "\tMoving warrior to #{direction}"
+				@warrior.walk! direction
+			end
 		end
 		
 		def rest
@@ -281,10 +287,10 @@ class Player
 					binded = @recent_binded_direction.select{ |key,value| 
 							@warrior.direction_of(key) == direction 
 						} unless @recent_binded_direction.empty? or not @recent_binded_direction.any?
-					
+						puts binded.inspect
 						if binded != nil and not binded.empty?					
 							warrior_feel = @warrior.feel(@warrior.direction_of(binded.keys[0]))
-							if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('s')
+							if not warrior_feel.nil? and (warrior_feel.to_s.downcase.start_with?('s') or warrior_feel.to_s.downcase.start_with?('t'))
 								puts "\tCaptive is in fact an enemy. Attack! in #{direction}"
 								attack_enemy direction
 	
@@ -415,7 +421,7 @@ class Player
 	
 				if binded != nil and not binded.empty?
 					warrior_feel = @warrior.feel(@warrior.direction_of(binded.keys[0]))
-					enemies << binded.keys[0] if not warrior_feel.nil? and warrior_feel.to_s.downcase.start_with?('s')
+					enemies << binded.keys[0] if not warrior_feel.nil? and (warrior_feel.to_s.downcase.start_with?('s') or warrior_feel.to_s.downcase.start_with?('t'))
 				end
 			end
 			
